@@ -1,0 +1,22 @@
+BackupFilesTo is a simple utility for backing up podcast episodes downloaded
+by gPodder (https://gpodder.github.io/) into another directory.
+
+Often when podcatchers download files, the file names are attrocious and have
+no relation to the episode title. I wanted a tool to put podcast episodes on a
+USB stick so that I could listen to them without my phone, but manually moving
+them was a pain.
+
+So, I wrote this. To use it, set up your gpodder correctly, subscribe to some
+podcasts, and download some episodes. You also need to have GPODDER_HOME and
+GPODDER_DOWNLOAD_DIR in your environment.
+
+Then, just run:
+
+$ BackupPodcastsTo /path/to/put/podcast/episodes
+
+The program will look at the gpodder database, find any episodes you've
+downloaded, and then copy them to a directory beneath the specified path named
+for the podcast, and the file name being the published date followed by the
+episode title. If the destination does not support certain characters in file
+names (such as :, ?, or other things windows filesystems do not support) it
+will sanitize them, replacing them with _ instead.

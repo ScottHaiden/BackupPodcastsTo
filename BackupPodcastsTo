@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+
+# This program is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+# details.
+# 
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see <https://www.gnu.org/licenses/>.
+
+import collections
+import datetime
+import os
+import pathlib
+import re
+import shutil
+import sqlite3
+import sys
+
+def sanitize(fname: str) -> str:
+    BAD_CHARS = r'<>:"/\|?*'
+    BAD_CHARS = re.escape(BAD_CHARS)
+    BAD_CHARS = f"[{BAD_CHARS}]"
+    BAD_CHARS = re.compile(BAD_CHARS)
+    return BAD_CHARS.sub("_", fname)
+
+class Podcast(collections.namedtuple("Podcast",
+    ["podcast", "title", "published", "dl_dir", "dl_file"])):
+
+    def original(self) -> pathlib.Path:
+        return self.dl_dir.joinpath(self.dl_file)
+
+    def new(self, fullsanitize=False) -> pathlib.Path:
+        dest = pathlib.Path(self.podcast)
+        title = self.new_title()
+        title = sanitize(title) if fullsanitize else title.replace("/", "_")
+        return dest / title
+
+    @property
+    def filetype(self): return self.dl_file.suffix
+
+    def format_date(self):
+        timezone = datetime.timezone.utc
+        dt = datetime.datetime.fromtimestamp(self.published, tz=timezone)
+        return dt.strftime("%Y%m%d%H%M%S")
+
+    def new_title(self):
+        return f"{self.format_date()} - {self.title}{self.filetype}"
+
+def read_all(cur):
+    cur.execute("SELECT p.title, e.title, e.published, "
+                "       p.download_folder, e.download_filename "
+                "FROM episode AS e "
+                "JOIN podcast AS p "
+                "ON e.podcast_id = p.id "
+                "WHERE e.download_filename IS NOT NULL "
+                "ORDER BY e.published")
+
+    def process():
+        for row in cur:
+            row = list(row)
+            dl_dir, dl_file = map(pathlib.Path, row[-2:])
+            row[-2:] = [dl_dir, dl_file]
+            yield row
+    return (Podcast(*row) for row in process())
+
+
+def find_podcasts(cur: sqlite3.Cursor, basedir: pathlib.Path):
+    entries = read_all(cur)
+    entries = [e for e in entries if basedir.joinpath(e.original()).exists()]
+    return entries
+    
+
+def format_date(timestamp: int) -> str:
+    timezone = datetime.timezone.utc
+    dt = datetime.datetime.fromtimestamp(timestamp, tz=timezone)
+    return dt.strftime("%Y%m%d%H%M%S")
+
+
+def try_copy(src, dst):
+    if not dst.parent.exists(): os.makedirs(dst.parent)
+
+    try:
+        shutil.copy2(src, dst)
+    except OSError:
+        return False
+
+    return True
+
+
+def main(dest: str):
+    gp_home = pathlib.Path(os.getenv("GPODDER_HOME"))
+    dl_dir = pathlib.Path(os.getenv("GPODDER_DOWNLOAD_DIR"))
+    dest = pathlib.Path(dest)
+
+    with sqlite3.connect(gp_home.joinpath("Database")) as cx:
+        entries = find_podcasts(cx.cursor(), dl_dir)
+
+    for entry in entries:
+        original = dl_dir / entry.original()
+        for new in map(entry.new, [False, True]):
+            new = dest / new
+            if new.exists(): break
+            if not try_copy(original, new): continue
+            print(f"{original} -> {new}")
+            break
+
+
+if __name__ == "__main__":
+    main(*sys.argv[1:])
