@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+# This program is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+# details.
+# 
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see <https://www.gnu.org/licenses/>.
+
+import hashlib
+import mmap
+import os
+import pathlib
+import sys
+
+def read_integrity(path):
+    def abspath(p): return pathlib.Path(p).absolute()
+    try:
+        with open(path, "r") as f:
+            lines = map(str.strip, f)
+            lines = (line.split("  ", maxsplit=1) for line in lines)
+            lines = {abspath(path): code for code, path in lines}
+            return lines
+    except FileNotFoundError:
+        return {}
+
+
+def hash_file(path, algo="sha512"):
+    h = hashlib.new(algo)
+    with open(path, "rb") as f:
+        mem = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+        h.update(mem)
+    return h.hexdigest()
+
+
+def main(integrity):
+    integrity = pathlib.Path(integrity).absolute()
+    os.chdir(integrity.parent)
+
+    known = read_integrity(integrity)
+
+    for dirpath, dirnames, filenames in os.walk(".", followlinks=False):
+        for filename in filenames:
+            path = pathlib.Path(dirpath).joinpath(filename)
+            if path.is_symlink(): continue
+            if path.absolute() in known: continue
+            if path.absolute() == integrity: continue
+
+            hashcode = hash_file(path)
+            known[path.absolute()] = hashcode
+            print(f"{hashcode}  {path}")
+
+    codes = known.items()
+    codes = sorted(codes)
+    codes = (f"{code}  {path.relative_to(integrity.parent)}\n" for path, code in codes)
+    with open(integrity, "wt") as integrity_file:
+        integrity_file.writelines(codes)
+
+if __name__ == "__main__":
+    main(*sys.argv[1:])
