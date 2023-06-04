@@ -45,7 +45,8 @@ class Podcast(collections.namedtuple("Podcast",
         return dest / title
 
     @property
-    def filetype(self): return self.dl_file.suffix
+    def filetype(self):
+        return self.dl_file.suffix if self.dl_file.suffix else ".mp3"
 
     def format_date(self):
         timezone = datetime.timezone.utc
