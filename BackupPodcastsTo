@@ -36,7 +36,7 @@ class Podcast(collections.namedtuple("Podcast",
     ["podcast", "title", "published", "dl_dir", "dl_file"])):
 
     def original(self) -> pathlib.Path:
-        return self.dl_dir.joinpath(self.dl_file)
+        return self.dl_dir / self.dl_file
 
     def new(self, fullsanitize=False) -> pathlib.Path:
         dest = pathlib.Path(self.podcast)
@@ -76,7 +76,7 @@ def read_all(cur):
 
 def find_podcasts(cur: sqlite3.Cursor, basedir: pathlib.Path):
     entries = read_all(cur)
-    entries = [e for e in entries if basedir.joinpath(e.original()).exists()]
+    entries = [e for e in entries if (basedir / e.original()).exists()]
     return entries
 
 
@@ -90,9 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--sanitize", action="store_true")
     parser.add_argument("-S", "--no-sanitize", dest="sanitize", action="store_false")
-
     parser.add_argument("destination")
-
     return parser.parse_args()
 
 
@@ -114,7 +112,7 @@ def main(args: argparse.Namespace):
     gp_home = pathlib.Path(os.getenv("GPODDER_HOME"))
     dl_dir = pathlib.Path(os.getenv("GPODDER_DOWNLOAD_DIR"))
 
-    with sqlite3.connect(gp_home.joinpath("Database")) as cx:
+    with sqlite3.connect(gp_home / "Database") as cx:
         entries = find_podcasts(cx.cursor(), dl_dir)
 
     with tempfile.TemporaryDirectory() as td:
