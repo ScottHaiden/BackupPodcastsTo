@@ -9,18 +9,21 @@
 # ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 # FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 # details.
-# 
+#
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
+import argparse
 import collections
 import datetime
 import os
 import pathlib
 import re
+import shlex
 import shutil
 import sqlite3
-import sys
+import subprocess
+import tempfile
 
 def sanitize(fname: str) -> str:
     BAD_CHARS = r'<>:"/\|?*'
@@ -74,7 +77,7 @@ def find_podcasts(cur: sqlite3.Cursor, basedir: pathlib.Path):
     entries = read_all(cur)
     entries = [e for e in entries if basedir.joinpath(e.original()).exists()]
     return entries
-    
+
 
 def format_date(timestamp: int) -> str:
     timezone = datetime.timezone.utc
@@ -82,34 +85,47 @@ def format_date(timestamp: int) -> str:
     return dt.strftime("%Y%m%d%H%M%S")
 
 
-def try_copy(src, dst):
-    if not dst.parent.exists(): os.makedirs(dst.parent)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--sanitize", action="store_true")
+    parser.add_argument("-S", "--no-sanitize", dest="sanitize", action="store_false")
 
-    try:
-        shutil.copy2(src, dst)
-    except OSError:
-        return False
+    parser.add_argument("destination")
 
-    return True
+    return parser.parse_args()
 
 
-def main(dest: str):
+def run_cmd(args):
+    argv = [str(arg) for arg in args]
+    cmd = shlex.join(argv)
+    print(f"$ {cmd}")
+    subprocess.check_call(argv)
+
+
+def stage_file(src, dest):
+    if not dest.parent.exists(): os.makedirs(dest.parent)
+    print(f"staging {src} -> {dest}")
+    shutil.copy2(src, dest)
+    dest.chmod(0o444)
+
+
+def main(args: argparse.Namespace):
     gp_home = pathlib.Path(os.getenv("GPODDER_HOME"))
     dl_dir = pathlib.Path(os.getenv("GPODDER_DOWNLOAD_DIR"))
-    dest = pathlib.Path(dest)
 
     with sqlite3.connect(gp_home.joinpath("Database")) as cx:
         entries = find_podcasts(cx.cursor(), dl_dir)
 
-    for entry in entries:
-        original = dl_dir / entry.original()
-        for new in map(entry.new, [False, True]):
-            new = dest / new
-            if new.exists(): break
-            if not try_copy(original, new): continue
-            print(f"{original} -> {new}")
-            break
+    with tempfile.TemporaryDirectory() as td:
+        staging = pathlib.Path(td)
 
+        for entry in entries:
+            orig = dl_dir / entry.original()
+            dest = staging / entry.new(args.sanitize)
+            stage_file(orig, dest)
+
+        run_cmd(["rsync", "-avrX", "--ignore-existing",
+                 f"{staging}/", args.destination])
 
 if __name__ == "__main__":
-    main(*sys.argv[1:])
+    main(parse_args())
