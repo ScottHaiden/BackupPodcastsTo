@@ -123,8 +123,14 @@ def main(args: argparse.Namespace):
             dest = staging / entry.new(args.sanitize)
             stage_file(orig, dest)
 
-        run_cmd(["rsync", "-avrX", "--ignore-existing",
-                 f"{staging}/", args.destination])
+        cmd = ["rsync", "--archive",
+                        "--verbose",
+                        "--recursive",
+                        "--ignore-existing"]
+        if not args.sanitize: cmd += ["--xattrs"]
+        cmd += [f"{staging}/", args.destination]
+
+        run_cmd(cmd)
 
 if __name__ == "__main__":
     main(parse_args())
