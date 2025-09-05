@@ -103,7 +103,7 @@ def run_cmd(args):
 
 def stage_file(src, dest):
     if not dest.parent.exists(): os.makedirs(dest.parent)
-    print(f"staging {src} -> {dest}")
+    print("staging {}".format(shlex.quote(str(dest))))
     shutil.copy2(src, dest)
     dest.chmod(0o444)
 
