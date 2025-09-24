@@ -82,6 +82,9 @@ def hash_new(cur: sqlite3.Cursor,
              remove: set[pathlib.Path]):
     removes_abspaths = set(map(pathlib.Path.absolute, remove))
 
+    maxlen = max(len(h) for h in hashes)
+    fmt = "{{hash}} [{{name:{maxlen}}}] {{path}}".format(maxlen=maxlen)
+
     def new_files():
         for stem in walk_dir(basedir):
             abspath = (basedir / stem).absolute()
@@ -100,7 +103,7 @@ def hash_new(cur: sqlite3.Cursor,
         new_hashes = hash_file(basedir / stem, needed)
         if path_id is None: path_id = insert_path(cur, stem)
         for hash_name, hash_val in new_hashes.items():
-            print(f"{hash_val.hex()} [{hash_name:7}] {stem}")
+            print(fmt.format(hash=hash_val.hex(), name=hash_name, path=stem))
             insert_hash(cur, path_id, hash_name, hash_val)
 
 
