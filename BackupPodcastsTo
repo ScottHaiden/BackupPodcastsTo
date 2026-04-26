@@ -91,11 +91,15 @@ def format_date(timestamp: int) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    def add_bool(flag, name):
-        parser.add_argument(f"-{flag}", f"--{name}", action="store_true")
-        parser.add_argument(f"-{flag.upper()}", f"--no-{name}", action="store_false")
-    add_bool("s", "sanitize")
-    add_bool("y", "year")
+    def add_bool(flag, name, default: bool, help: str):
+        parser.add_argument(f"-{flag}", f"--{name}",
+                            action="store_true", default=default, help=help)
+        parser.add_argument(f"-{flag.upper()}", f"--no-{name}",
+                            action="store_false", dest=name.replace("-", "_"))
+    add_bool("s", "sanitize", False,
+             "Sanitize filenames for vfat-safe filesystems.")
+    add_bool("y", "year", False,
+             "Include the year as a directory component in dest filesystem.")
     parser.add_argument("destination")
     return parser.parse_args()
 
